@@ -225,7 +225,7 @@ Below are several possible errors listed with their solution.
 
 ### The build of the container from the definition file could not be completed due to error
 
-If an error occurred during the build of the container then depending on the error the version of [Readfish](https://github.com/LooseLab/readfish/tree/main?tab=readme-ov-file#testing) or [BOSS-RUNS]([https://pages.github.com/](https://github.com/goldman-gp-ebi/BOSS-RUNS) might have been deprecated due to newer MinKNOW software and the respective authors need to be contacted.
+If an error occurred during the build of the container then depending on the error the version of [Readfish](https://github.com/LooseLab/readfish/tree/main?tab=readme-ov-file#testing) or [BOSS-RUNS](https://github.com/goldman-gp-ebi/BOSS-RUNS) might have been deprecated due to newer MinKNOW software and the respective authors need to be contacted.
 
 
 ### Error during playback
