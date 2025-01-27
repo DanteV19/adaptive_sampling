@@ -1,0 +1,20 @@
+[general]
+name = "boss_conf"
+wait = 60
+ref = "/project/clonevo/Share/dante/data/ncbi_dataset/data/GCF_000001405.40/human_ref.fa"
+mmi = "/project/clonevo/Share/dante/data/ncbi_dataset/data/GCF_000001405.40/human_ref.mmi"
+
+
+
+[live]
+device = "1A"                   # position on sequencer
+host = "localhost"              # host of sequencing device
+port = 9502                     # port of sequencing device
+data_wait = 100                 # wait for X Mb of data before first update
+prom = true                    # switch for using a PromethION flowcell (experimental)
+
+[optional]
+reject_refs = ""                # comma-separated list of headers in reference from which to always reject
+ploidy = 1                      # 1 or 2
+bucket_threshold = 0
+

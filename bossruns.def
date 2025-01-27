@@ -1,0 +1,192 @@
+bootstrap: docker
+from: nvidia/cuda:12.2.0-base-ubuntu22.04
+
+%labels
+	By Dante Visser
+	Version 1.0
+
+%environment
+    export HOME=/project/clonevo/Share/dante
+    export TMPDIR=/tmp
+    export PROMPT_COMMAND='echo "$(date): $(history 1)" >> ~/command_log.txt'
+    # Activate the Conda environment by default
+    export PATH="/miniconda3/bin:$PATH"
+    . activate simion
+
+
+%runscript
+    # Specify duration of playback experiment
+    echo "Starting script..."
+
+    if [ "$#" -eq 0 ]; then
+        echo "No arguments provided. Running default behavior..."
+        # Default actions for no arguments
+
+    elif [ "$#" -eq 1 ]; then
+        echo "One argument provided: $1"
+        # Actions for a single argument
+
+    elif [ "$#" -eq 2 ]; then
+        echo "Two arguments provided: $1 and $2"
+        # Actions for two arguments
+
+    elif [ "$#" -eq 3 ]; then
+        echo "Three arguments provided: $1, $2 and $3"
+        # Actions for three arguments
+
+    elif [ "$#" -eq 4 ]; then
+        echo "Four arguments provided:\nAbsolute path to promethion bulk file for playback:$1\nExperiment duration: $2 hours,\n
+Output directory for adaptive sampling: $3\nReadfish toml absolute path: $4"
+        # Specify absolute path to promethion bulk file
+        sed -i "s|\(simulation=\"\)[^\"]*\(.*\)|\1$1\2|" /opt/ont/minknow/conf/package/sequencing/sequencing_PRO114_DNA_e8_2_400K.toml
+        # Specify experiment duration in hours
+        sed -i 's/--experiment-duration 2/--experiment-duration $2/g' /simION/code/launch_playback_prom.sh
+        # Initiate playback
+        bash /simION/code/launch_playback_prom.sh
+        # Make output directory if not existing already and change into that directory
+        mkdir -p $3
+        cd $3
+        # Execute Readfish adaptive sampling with readfish toml
+        time readfish targets --toml $4 --device 1A --log-file targets.log --experiment-name select_genes
+
+    elif [ "$#" -eq 5 ]; then
+        echo "Five arguments provided:\nAbsolute path to promethion bulk file for playback:$1\nExperiment duration: $2 hours,\n
+Output directory for adaptive sampling: $3\nReadfish toml absolute path: $4\nBOSS-RUNS toml absolute path: $5"
+        # Specify absolute path to promethion bulk file
+        sed -i "s|\(simulation=\"\)[^\"]*\(.*\)|\1$1\2|" /opt/ont/minknow/conf/package/sequencing/sequencing_PRO114_DNA_e8_2_400K.toml
+        # Specify experiment duration in hours
+        sed -i 's/--experiment-duration 2/--experiment-duration $2/g' /simION/code/launch_playback_prom.sh
+        # Initiate playback
+        bash /simION/code/launch_playback_prom.sh
+        # Make output directory if not existing already and change into that directory
+        mkdir -p $3
+        cd $3
+        # Execute BOSS-RUNS adaptive sampling with boss toml and readfish toml
+        time boss --toml $5 --toml_readfish $4
+
+    else
+        echo "Too many arguments provided."
+        echo "Arguments: $@"
+        # Actions for more than five arguments
+    fi
+
+    echo "Script completed."
+
+
+%setup
+    # Transfer files on the host to the container during building the container
+    cp -r $(pwd)/code "${SINGULARITY_ROOTFS}/"
+
+
+%post
+    # Set up the working directory
+    mkdir -p /mnt/scratch
+    mkdir -p /project/clonevo/Share/dante/
+    touch command_log.txt
+    export HOME=/project/clonevo/Share/dante/
+
+    TZ=Europe/Amsterdam
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    apt update
+    apt install -y tzdata
+
+    # Install necessary packages
+    apt-get update && apt-get install -y \
+        apt-utils \
+        build-essential \
+        dialog \
+        pciutils \
+        ca-certificates \
+        curl \
+        perl \
+        language-pack-en \
+        protobuf-compiler \
+        libprotobuf-dev \
+        libhdf5-dev
+
+    # installs that need some prompt evasion
+    DEBIAN_FRONTEND="noninteractive" apt-get install -y keyboard-configuration
+
+    apt-get install -y wget lsb-release less git nano htop gcc \
+         zlib1g zlib1g-dev python3 python3-pip aptitude gnupg software-properties-common
+
+    
+
+    echo "
+Install MinKNOW for simion"
+
+    apt-get update
+
+    # Install MinKNOW
+
+    #As a preparatory step, add the ONT repositories to the APT database:
+    ## adding to keyring directory [as in Debian] for focal-stable directory
+    wget -O /etc/apt/trusted.gpg.d/nanopore.asc https://cdn.oxfordnanoportal.com/apt/ont-repo.pub --no-check-certificate
+
+    echo "deb https://cdn.oxfordnanoportal.com/apt jammy-stable non-free" | tee /etc/apt/sources.list.d/nanoporetech.sources.list
+
+    # Update package lists
+    aptitude update
+
+    # Install MinKNOW software for GPU basecalling and playback
+    DEBIAN_FRONTEND=noninteractive aptitude install -y ont-standalone-minknow-release
+
+    # PERMISSIONS of config files - to make them writable at runtime
+    chmod -R a+w /opt/ont/dorado/data
+    chmod a+w /opt/ont/minknow/conf/app_conf
+    chmod a+w /opt/ont/minknow/conf/user_conf
+    chmod a+w /opt/ont/minknow/conf/package/sequencing/sequencing_MIN114_DNA_e8_2_400K.toml
+    chmod a+w /opt/ont/minknow/conf/package/sequencing/sequencing_PRO114_DNA_e8_2_400K.toml
+    #chmod a+rwx /tmp/.guppy/                                                               # Does not exist at build time
+    chmod 4755 /opt/ont/ui/kingfisher/chrome-sandbox
+
+    # reduce size of the container - don't need all of the basecalling models
+    rm -r /opt/ont/dorado-models/rna* || echo "remove failed"
+    rm -r /opt/ont/dorado-models/dna_r9* || echo "remove failed"
+    rm -r /opt/ont/dorado-models/dna*260* || echo "remove failed"
+    rm -r /opt/ont/dorado-models/*sup* || echo "remove failed"
+
+    # Preparing miniconda
+    echo "
+Installing miniconda..."
+    # Create directory for conda
+    mkdir -p ./miniconda3
+    # Retrieve miniconda executable to install miniconda
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ./miniconda3/miniconda.sh
+    # Give rights to execute miniconda executable
+    chmod +x ./miniconda3/miniconda.sh
+
+    # Install miniconda
+    ./miniconda3/miniconda.sh -b -u -p ./miniconda3
+    # Give for every file within miniconda directory all rights for everyone
+    chmod --recursive a+rw ./miniconda3
+    # Remove executable
+    rm ./miniconda3/miniconda.sh
+
+    # Install BOSS-RUNS repository
+    git clone https://github.com/goldman-gp-ebi/BOSS-RUNS.git
+
+    # Activate conda environment for simion
+    echo "
+Create conda env for simion..."
+    # Retrieve simion files from github
+    /miniconda3/bin/conda env create -f /code/simion.yml
+
+    # Install simION repository to run playback without graphical user interface (GUI) adapted for playback with simulated PromethION device
+    git clone https://github.com/DanteV19/simION.git
+
+    # Make a backup copy of the sequencing protocol
+    cp /opt/ont/minknow/conf/package/sequencing/sequencing_MIN114_DNA_e8_2_400K.toml /opt/ont/minknow/conf/package/sequencing/sequencing_MIN114_DNA_e8_2_400K.toml.bkp
+    cp /opt/ont/minknow/conf/package/sequencing/sequencing_PRO114_DNA_e8_2_400K.toml /opt/ont/minknow/conf/package/sequencing/sequencing_PRO114_DNA_e8_2_400K.toml.bkp
+
+    # Add the line to point to a bulkfile for simulation 
+    # this is still needed despite the playback option that exists in the GUI now
+    # CHANGE THE PATH TO THE BULKFILE HERE
+    sed -i '/\[custom_settings\]/a simulation="/project/clonevo/Share/dante/data/correctbulk/pmc-hee-ldp-p-app-01.researchidt.prinsesmaximacentrum.nl_20240909_1221_PAY00003_2A_sequencing_run_28560Re_22041Re_7479b0ee_c5208e21.fast5"' /opt/ont/minknow/conf/package/sequencing/sequencing_PRO114_DNA_e8_2_400K.toml
+
+    # Add minimum q filter of 9 for reads
+    sed -i '80 i\[basecaller_configuration.read_filtering]\nmin_qscore = 9' /opt/ont/minknow/conf/package/sequencing/sequencing_PRO114_DNA_e8_2_400K.toml
+
+    # Clean up the package cache
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*

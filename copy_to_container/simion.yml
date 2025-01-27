@@ -1,0 +1,24 @@
+name: simion
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11 #3.10
+  - gfatools
+  - minimap2
+  - miniasm
+  - bedtools
+  - samtools
+  - deeptools
+  - pandas
+  - matplotlib
+  - pip
+  - pip:
+    - readfish[all]==2024.3.0
+    - bottleneck
+    - numba
+    - scipy
+    - pytest-cov
+    - pytest-timeout
+    - boss_runs
